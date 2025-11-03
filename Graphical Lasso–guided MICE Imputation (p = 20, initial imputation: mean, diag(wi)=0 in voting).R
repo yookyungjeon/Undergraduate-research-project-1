@@ -247,7 +247,7 @@ plot_roc_curve <- function(avg_roc_df, title) {
 average_roc_dfs <- lapply(roc_dfs, average_roc_df)
 avg_plots <- list(
   plot_roc_curve(average_roc_dfs$p1, "Proposed Method"),
-  plot_roc_curve(average_roc_dfs$p2, "Completed Data"),
+  plot_roc_curve(average_roc_dfs$p2, "Complete Data"),
   plot_roc_curve(average_roc_dfs$p3, "MICE Default"),
   plot_roc_curve(average_roc_dfs$p4, "MICE Lasso")
 )
