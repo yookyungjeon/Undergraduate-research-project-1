@@ -158,7 +158,7 @@ for (run in 1:10) {
 
   # (ii) Complete Data (oracle, no missingness)
   start_time <- Sys.time()
-  dataset2 <- list(completed_data)
+  dataset2 <- list(complete_data)
   Omega_oracle_bin <- calculate_majority_vote(dataset2, rho_values)
   roc_result2 <- roc_curve(Omega_oracle_bin, Omega_bin, "Complete Data")
   roc_dfs$p2 <- append(roc_dfs$p2, list(roc_result2$roc_df))
