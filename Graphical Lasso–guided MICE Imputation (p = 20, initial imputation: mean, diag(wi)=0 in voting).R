@@ -165,15 +165,15 @@ for (run in 1:10) {
                                                 time = difftime(end_time, start_time, units = "mins"))))
 
 
-  # (ii) Completed Data (oracle)
+  # (ii) Complete Data (oracle)
   start_time <- Sys.time()
-  dataset2 <- list(completed_data)
+  dataset2 <- list(complete_data)
   Omega_oracle_bin <- calculate_majority_vote(dataset2, rho_values)
-  roc_result2 <- roc_curve(Omega_oracle_bin, Omega_bin, "Completed Data")
+  roc_result2 <- roc_curve(Omega_oracle_bin, Omega_bin, "Complete Data")
   roc_dfs$p2 <- append(roc_dfs$p2, list(roc_result2$roc_df))
-  auc_values <- rbind(auc_values, data.frame(Method = "Completed Data", Run = run, AUC = roc_result2$auc))
+  auc_values <- rbind(auc_values, data.frame(Method = "Complete Data", Run = run, AUC = roc_result2$auc))
   end_time <- Sys.time()
-  time_results <- append(time_results, list(list(run = run, step = "ROC by Completed Data",
+  time_results <- append(time_results, list(list(run = run, step = "ROC by Complete Data",
                                                 time = difftime(end_time, start_time, units = "mins"))))
 
 
