@@ -34,7 +34,7 @@ when **10% MCAR (Missing Completely At Random)** values are introduced.
 | Method | Description |
 |--------|--------------|
 | **Proposed (Glasso-guided MICE)** | Iterative MICE guided by precision matrices estimated via Graphical Lasso |
-| **Completed Data (Oracle)** | Benchmark estimation from complete data without missingness |
+| **Complete Data (Oracle)** | Benchmark estimation from complete data without missingness |
 | **MICE (Default)** | Standard MICE assuming variable independence |
 | **MICE (Lasso)** | MICE using lasso-based conditional models (`lasso.select.norm`) |
 
@@ -53,7 +53,7 @@ and **AUC (Area Under the ROC Curve)**.
 | ③ | Introduce 10% MCAR missingness |
 | ④ | Perform initial imputation (mean or MICE) |
 | ⑤ | Estimate network structure via Graphical Lasso and use it in MICE predictor matrix |
-| ⑥ | Compare Proposed, MICE, MICE-Lasso, and Completed Data methods |
+| ⑥ | Compare Proposed, MICE, MICE-Lasso, and Complete Data methods |
 | ⑦ | Calculate FPR, TPR, and AUC, and visualize ROC curves |
 
 ---
@@ -92,7 +92,7 @@ and **AUC (Area Under the ROC Curve)**.
 - **MICE (Default / Lasso)**  
   Provided stable imputations but underperformed in network reconstruction accuracy.  
 
-- **Completed Data (Oracle)**  
+- **Complete Data (Oracle)**  
   Serves as the upper performance bound for model comparison.  
 
 All results are summarized as averaged ROC curves (across 10 runs),  
