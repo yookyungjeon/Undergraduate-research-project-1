@@ -65,7 +65,7 @@ and **AUC (Area Under the ROC Curve)**.
 | `Graphical Lasso–guided MICE Imputation (p = 20, initial imputation: mean).R` | Baseline experiment using mean initialization |
 | `Graphical Lasso–guided MICE Imputation (p = 20, initial imputation: mean, diag(wi)=0 in voting).R` | Version excluding diagonal elements during voting |
 | `Graphical Lasso–guided MICE Imputation (p = 20, initial imputation: MICE).R` | Medium-dimensional scenario initialized with MICE |
-| `Graphical Lasso–guided MICE Imputation (p = 50, initial imputation: MICE).R` | High-dimensional (𝑝 > 𝑛) extension for scalability testing |
+| `Graphical Lasso–guided MICE Imputation (p = 50, initial imputation: MICE).R` | High-dimensional settings for scalability testing |
 
 ---
 
