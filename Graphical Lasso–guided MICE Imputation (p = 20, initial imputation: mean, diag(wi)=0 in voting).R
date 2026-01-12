@@ -26,7 +26,7 @@ for (run in 1:10) {
   set.seed(run * 100)
 
   # 2-1) Generate data
-  # (i) Precision matrix (Omega): 1 on diagonal, 0.5 on immediate off-diagonals
+  # (i) Precision Omega: 1 on diagonal, 0.5 on immediate off-diagonals
   Omega <- diag(1, p)
   for (i in 1:(p - 1)) {
     Omega[i, i + 1] <- 0.5
@@ -34,10 +34,10 @@ for (run in 1:10) {
   }
   Sigma <- solve(Omega)
 
-  # (ii) Generate multivariate normal data
+  # (ii) Sample data from N(0, Sigma)
   complete_data <- mvrnorm(n, rep(0, p), Sigma)
 
-  # (iii) Inject MCAR missingness at rate 0.1
+  # (iii) Inject MCAR missingness at 10%
   missing_pattern <- matrix(rbinom(n * p, 1, 0.1), n, p)
   data_na <- complete_data
   data_na[missing_pattern == 1] <- NA
@@ -64,44 +64,36 @@ for (run in 1:10) {
                                                 time = difftime(end_time, start_time, units = "mins"))))
 
 
-  # 2-3) Iterative MICE guided by glasso 
+  # 2-3) Iterative imputation guided by glasso 
   start_time <- Sys.time()
 
   for (data_set_number in 1:5) {
     for (iter in 1:5) {
-      # (i) Fit glasso path over rho grid
+      # Glasso path over rho grid
       rho_values <- seq(0, 200, by = 1)
       glasso_results <- glassopath(cov(data), rholist = rho_values, trace = 0)
 
-      # (ii) Select rho via BIC-like criterion
+      # BIC-like selection of rho
       BIC_values <- sapply(seq_along(rho_values), function(j) {
         Omega_j <- glasso_results$wi[, , j]
         non_zero_count <- sum(abs(Omega_j) > 0)
         log(det(Omega_j)) - sum(diag(cov(data) %*% Omega_j)) - non_zero_count * log(n)
       })
       optimal_rho_index <- which.min(BIC_values)
+      optimal_rho <- rho_values[optimal_rho_index]
 
-      # (iii) Build predictorMatrix from nonzeros of selected precision
+      # Predictor matrix from nonzeros of selected precision
       glasso_result_wi <- glasso_results$wi[, , optimal_rho_index]
       predictorMatrix <- ifelse(abs(glasso_result_wi) > 0, 1, 0)
       diag(predictorMatrix) <- 0
 
-      # (iv) One-step MICE using predictorMatrix; only impute where missing
-      imputed_data <- mice(
-        data,
-        m = 1,
-        maxit = 1,
-        predictorMatrix = predictorMatrix,
-        where = (missing_pattern == 1),
-        seed = 500,
-        printFlag = FALSE
-      )
+      # MICE imputation using predictorMatrix
+      imputed_data <- mice( data, m = 1, maxit = 1, predictorMatrix = predictorMatrix, where = (missing_pattern == 1), seed = 500, printFlag = FALSE)
       completed_data <- complete(imputed_data, action = 1)
 
-      # (v) Update data
+      # Update current data
       data <- completed_data
     }
-
     assign(paste("pseudo_complete", data_set_number, sep = ""), data, envir = .GlobalEnv)
   }
 
@@ -110,12 +102,12 @@ for (run in 1:10) {
                                                 time = difftime(end_time, start_time, units = "mins"))))
 
 
-  # 2-4) ROC evaluation vs. true Omega 
+  # 2-4) ROC curve comparing the estimated and true precision matrices
   Omega_bin <- ifelse(abs(Omega) > 0, 1, 0)
   diag(Omega_bin) <- 0
   rho_values <- seq(0, 200, by = 1)
 
-  # Helper: ROC curve and AUC calculation
+  # Build ROC curve and AUC across rho values
   roc_curve <- function(final_Omega_est_bin, Omega_bin, subtitle) {
     roc_df <- data.frame(FPR = numeric(), TPR = numeric(), rho = numeric())
     for (rho_idx in 1:length(rho_values)) {
@@ -123,37 +115,36 @@ for (run in 1:10) {
       pred <- prediction(as.vector(Omega_est_bin), as.vector(Omega_bin))
       perf <- performance(pred, "tpr", "fpr")
       roc_df <- rbind(roc_df,
-                      data.frame(FPR = unlist(perf@x.values),
-                                 TPR = unlist(perf@y.values),
-                                 rho = rho_values[rho_idx]))
+                      data.frame(FPR = unlist(perf@x.values), TPR = unlist(perf@y.values), rho = rho_values[rho_idx]))
     }
+    
     roc_df <- roc_df[order(roc_df$FPR), ]
     auc_value <- trapz(roc_df$FPR, roc_df$TPR)
+    
     list(roc_df = roc_df, auc = auc_value)
   }
 
-  # Helper: majority vote across datasets
+  # Build edge-wise majority vote across datasets for each rho
   calculate_majority_vote <- function(datasets, rho_values) {
     num_datasets <- length(datasets)
     combined_Omega_est_bin <- array(0, dim = c(p, p, length(rho_values)))
+    
     for (rho_idx in seq_along(rho_values)) {
       rho <- rho_values[rho_idx]
+      
       Omega_est_list <- lapply(datasets, function(dat) {
         gl <- glasso(cov(dat), rho = rho)
         diag(gl$wi) <- 0
         ifelse(abs(gl$wi) > 0, 1, 0)
       })
-      combined_Omega_est_bin[, , rho_idx] <- apply(
-        array(unlist(Omega_est_list), c(p, p, num_datasets)),
-        c(1, 2),
-        function(x) ifelse(sum(x) > (num_datasets / 2), 1, 0)
-      )
+      
+      combined_Omega_est_bin[, , rho_idx] <- apply( array(unlist(Omega_est_list), c(p, p, num_datasets)), c(1, 2), function(x) ifelse(sum(x) > (num_datasets / 2), 1, 0))
     }
     combined_Omega_est_bin
   }
 
 
-  # (i) Proposed Method
+  # (i) Proposed method (pseudo-complete via glasso-guided MICE)
   start_time <- Sys.time()
   dataset1 <- mget(paste0("pseudo_complete", 1:5))
   Omega_imputation_maj <- calculate_majority_vote(dataset1, rho_values)
@@ -165,7 +156,7 @@ for (run in 1:10) {
                                                 time = difftime(end_time, start_time, units = "mins"))))
 
 
-  # (ii) Complete Data (oracle)
+  # (ii) Complete Data (oracle, no missingness)
   start_time <- Sys.time()
   dataset2 <- list(complete_data)
   Omega_oracle_bin <- calculate_majority_vote(dataset2, rho_values)
@@ -177,7 +168,7 @@ for (run in 1:10) {
                                                 time = difftime(end_time, start_time, units = "mins"))))
 
 
-   # (iii) MICE default
+  # (iii) MICE default (m = 5), majority vote
   start_time <- Sys.time()
   imputed_data1 <- mice(data_na, m = 5, seed = 123, printFlag = FALSE)
   end_time <- Sys.time()
@@ -196,7 +187,7 @@ for (run in 1:10) {
                                                 time = difftime(end_time, start_time, units = "mins"))))
 
 
-  # (iv) MICE with lasso.select.norm
+  # (iv) MICE with lasso.select.norm (m = 5), majority vote
   start_time <- Sys.time()
   imputed_data2 <- mice(data_na, method = "lasso.select.norm", m = 5, seed = 123, printFlag = FALSE)
   end_time <- Sys.time()
@@ -218,8 +209,8 @@ for (run in 1:10) {
 }
 
 
-# 3) Average ROC curves -----------------------------------
-# (i) Average ROC across 10 runs for each method
+# 3) Aggregate ROC plots -----------------------------------
+# Average multiple ROC curves by interpolating TPR over a common FPR grid
 average_roc_df <- function(roc_dfs) {
   fpr_vals <- seq(0, 1, length.out = 100)
   combined_roc_df <- data.frame(FPR = numeric(), TPR = numeric())
@@ -230,7 +221,7 @@ average_roc_df <- function(roc_dfs) {
   aggregate(TPR ~ FPR, data = combined_roc_df, mean)
 }
 
-# (ii) Plot helper with AUC in title
+# Plot averaged ROC curve and compute AUC
 plot_roc_curve <- function(avg_roc_df, title) {
   auc_value <- trapz(avg_roc_df$FPR, avg_roc_df$TPR)
   ggplot(avg_roc_df, aes(x = FPR, y = TPR)) +
