@@ -131,8 +131,7 @@ for (run in 1:10) {
         ifelse(abs(gl$wi) > 0, 1, 0)
       })
       
-      combined_Omega_est_bin[, , rho_idx] <- apply( array(unlist(Omega_est_list), c(p, p, num_datasets)), c(1, 2), function(x) ifelse(sum(x) > (num_datasets / 2), 1, 0)
-      )
+      combined_Omega_est_bin[, , rho_idx] <- apply( array(unlist(Omega_est_list), c(p, p, num_datasets)), c(1, 2), function(x) ifelse(sum(x) > (num_datasets / 2), 1, 0))
     }
     combined_Omega_est_bin
   }
@@ -199,9 +198,11 @@ for (run in 1:10) {
 }
 
 # 3) Aggregate ROC plots -----------------------------------
+# Average multiple ROC curves by interpolating TPR over a common FPR grid
 average_roc_df <- function(roc_dfs) {
   fpr_vals <- seq(0, 1, length.out = 100)
   combined_roc_df <- data.frame(FPR = numeric(), TPR = numeric())
+  
   for (roc_df in roc_dfs) {
     interp_tpr <- approx(roc_df$FPR, roc_df$TPR, xout = fpr_vals)$y
     combined_roc_df <- rbind(combined_roc_df, data.frame(FPR = fpr_vals, TPR = interp_tpr))
@@ -209,6 +210,7 @@ average_roc_df <- function(roc_dfs) {
   aggregate(TPR ~ FPR, data = combined_roc_df, mean)
 }
 
+# Plot averaged ROC curve and compute AUC
 plot_roc_curve <- function(avg_roc_df, title) {
   auc_value <- trapz(avg_roc_df$FPR, avg_roc_df$TPR)
   ggplot(avg_roc_df, aes(x = FPR, y = TPR)) +
