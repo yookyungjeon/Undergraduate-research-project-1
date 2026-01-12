@@ -70,29 +70,22 @@ for (run in 1:10) {
       rho_values <- seq(0, 200, by = 1)
       glasso_results <- glassopath(cov(data), rholist = rho_values, trace = 0)
 
-      # BIC-like selection of rho: log|Omega| - tr(S*Omega) - |Omega|_0 * log(n)
+      # BIC-like selection of rho
       BIC_values <- sapply(seq_along(rho_values), function(j) {
         Omega_j <- glasso_results$wi[, , j]
         non_zero_count <- sum(abs(Omega_j) > 0)
         log(det(Omega_j)) - sum(diag(cov(data) %*% Omega_j)) - non_zero_count * log(n)
       })
       optimal_rho_index <- which.min(BIC_values)
+      optimal_rho <- rho_values[optimal_rho_index]
 
       # Predictor matrix from nonzeros of selected precision
       glasso_result_wi <- glasso_results$wi[, , optimal_rho_index]
       predictorMatrix <- ifelse(abs(glasso_result_wi) > 0, 1, 0)
       diag(predictorMatrix) <- 0
 
-      # One-step MICE using predictorMatrix; only impute where missing
-      imputed_data <- mice(
-        data,
-        m = 1,
-        maxit = 1,
-        predictorMatrix = predictorMatrix,
-        where = (missing_pattern == 1),
-        seed = 500,
-        printFlag = FALSE
-      )
+      # MICE imputation using predictorMatrix
+      imputed_data <- mice( data,m = 1, maxit = 1, predictorMatrix = predictorMatrix, where = (missing_pattern == 1), seed = 500, printFlag = FALSE)
       completed_data <- complete(imputed_data, action = 1)
 
       # Update current data
@@ -105,41 +98,40 @@ for (run in 1:10) {
   imputation_time <- difftime(end_time, start_time, units = "mins")
   time_results <- append(time_results, list(list(run = run, step = "Imputation", time = imputation_time)))
 
-  # 2-4) ROC evaluation vs. true Omega
+  # 2-4) ROC curve comparing the estimated and true precision matrices
   Omega_bin <- ifelse(abs(Omega) > 0, 1, 0)
   rho_values <- seq(0, 200, by = 1)
 
-  # Helper: build ROC (FPR, TPR) and AUC for a stack of binary Omegas across rho
+  # Build ROC curve and AUC across rho values
   roc_curve <- function(final_Omega_est_bin, Omega_bin, subtitle) {
     roc_df <- data.frame(FPR = numeric(), TPR = numeric(), rho = numeric())
     for (rho_idx in 1:length(rho_values)) {
       Omega_est_bin <- final_Omega_est_bin[, , rho_idx]
       pred <- prediction(as.vector(Omega_est_bin), as.vector(Omega_bin))
       perf <- performance(pred, "tpr", "fpr")
-      roc_df <- rbind(
-        roc_df,
-        data.frame(FPR = unlist(perf@x.values), TPR = unlist(perf@y.values), rho = rho_values[rho_idx])
-      )
+      roc_df <- rbind( roc_df, data.frame(FPR = unlist(perf@x.values), TPR = unlist(perf@y.values), rho = rho_values[rho_idx]))
     }
+    
     roc_df <- roc_df[order(roc_df$FPR), ]
     auc_value <- trapz(roc_df$FPR, roc_df$TPR)
+    
     list(roc_df = roc_df, auc = auc_value)
   }
 
-  # Helper: majority vote of edges across datasets at each rho
+  # Build edge-wise majority vote across datasets for each rho
   calculate_majority_vote <- function(datasets, rho_values) {
     num_datasets <- length(datasets)
     combined_Omega_est_bin <- array(0, dim = c(p, p, length(rho_values)))
+    
     for (rho_idx in seq_along(rho_values)) {
       rho <- rho_values[rho_idx]
+      
       Omega_est_list <- lapply(datasets, function(dat) {
         gl <- glasso(cov(dat), rho = rho)
         ifelse(abs(gl$wi) > 0, 1, 0)
       })
-      combined_Omega_est_bin[, , rho_idx] <- apply(
-        array(unlist(Omega_est_list), c(p, p, num_datasets)),
-        c(1, 2),
-        function(x) ifelse(sum(x) > (num_datasets / 2), 1, 0)
+      
+      combined_Omega_est_bin[, , rho_idx] <- apply( array(unlist(Omega_est_list), c(p, p, num_datasets)), c(1, 2), function(x) ifelse(sum(x) > (num_datasets / 2), 1, 0)
       )
     }
     combined_Omega_est_bin
